@@ -7,14 +7,34 @@ import { createGithubRepositoryService } from './createGithubRepositoryService.j
 
 const PORT = 3000;
 
-const getWebhookCallbackUrl = (localtunnel, provider) => {
-  return new URL(provider, localtunnel.url).toString();
+const getWebhookCallbackUrl = (localtunnel, provider, projectId) => {
+  const url = new URL(`/${provider}/${projectId}`, localtunnel.url);
+
+  return url.toString();
 };
 
-const server = fastify();
+const server = fastify({
+  logger: {
+    transport:
+      process.env.NODE_ENV !== 'production'
+        ? {
+          target: 'pino-pretty',
+          options: {
+            translateTime: 'HH:MM:ss Z',
+            ignore: 'pid,hostname'
+          }
+        }
+        : undefined
+  }
+});
+
+server.setErrorHandler(function (error, request, reply) {
+  this.log.error(error)
+  reply.status(409).send({ ok: false });
+})
 
 await server.register(import('fastify-raw-body'), {
-  field: 'rawBody', // change the default request.rawBody property name
+  field: 'rawBody',
   global: false,
   runFirst: true,
   routes: ['/:provider']
@@ -25,23 +45,26 @@ await server.register(import('@fastify/cors'), {
 });
 
 const localtunnel = await createLocalTunnel({ port: PORT, subdomain: 'git-live-deploy-aaaa' });
-console.info(`Created local tunnel available at ${localtunnel.url}`);
+server.log.info(`Created local tunnel available at ${localtunnel.url}`);
 
 const githubService = await createGithubRepositoryService({
-  callbackUrl: getWebhookCallbackUrl(localtunnel, '/github'),
-  githubToken: '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',
+  callbackUrl: getWebhookCallbackUrl(localtunnel, 'github', 'dummy_repo'),
+  githubToken: process.env.GITHUB_API_TOKEN,
   repoOwner: 'LeoMartinDev',
   repoName: 'dummy_repo'
 });
 
-server.post('/:provider', async (request, reply) => {
-  const { provider } = request.params;
-  console.info('Received webhook from', provider);
+server.post('/:provider/:projectId', async (request, reply) => {
+  const { provider, projectId } = request.params;
+
+  if (!projectId) {
+    throw new Error('Missing project id');
+  }
 
   if (provider === 'github') {
     const payload = await githubService.extractWebhookCallbackPayload({ body: request.body, rawBody: request.rawBody, headers: request.headers });
 
-    console.info('Received payload from GitHub', payload);
+    server.log.info('Received push event from GitHub', payload);
 
     const writeStream = fs.createWriteStream(`${payload.commitId}.zip`);
 
@@ -52,8 +75,3 @@ server.post('/:provider', async (request, reply) => {
 });
 
 await server.listen({ port: PORT });
-
-
-
-
-console.info('Started');
