@@ -1,9 +1,13 @@
 import { createWriteStream } from "fs";
 import { join, resolve } from "path";
 import { pipeline } from "stream";
+import { promisify } from "util";
+import { homedir } from "os";
+import mkdirp from "mkdirp";
+
 import { DeployRequest, RepositoryService } from "./RepositoryService.js";
 
-const dataDirectory = "/opt/git-live-deploy/data";
+const dataDirectory = join(homedir(), "/git-live-deploy/data");
 
 export function createDeployService(repositoryService: RepositoryService) {
   return {
@@ -19,14 +23,18 @@ export function createDeployService(repositoryService: RepositoryService) {
           payload.commitId
         );
 
-      const writable = createWriteStream(
-        resolve(
-          dataDirectory,
-          join(repositoryService.projectId, payload.commitId)
-        )
+      const downloadDirectoryPath = resolve(
+        dataDirectory,
+        repositoryService.projectId
       );
 
-      await pipeline(readable, writable);
+      await mkdirp(downloadDirectoryPath);
+
+      const writable = createWriteStream(
+        join(downloadDirectoryPath, `${payload.commitId}.tar`)
+      );
+
+      await promisify(pipeline)(readable, writable);
     },
   };
 }

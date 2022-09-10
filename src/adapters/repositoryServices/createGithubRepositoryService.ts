@@ -161,7 +161,7 @@ export async function createGithubRepositoryService({
     downloadRepositoryArchiveAtCommit: async (commitId) => {
       const response = await githubClient({
         method: "GET",
-        path: `repos/${repoOwner}/${repoName}/zipball/${commitId}`,
+        path: `repos/${repoOwner}/${repoName}/tarball/${commitId}`,
         redirect: "follow",
         responseType: "stream",
       });
