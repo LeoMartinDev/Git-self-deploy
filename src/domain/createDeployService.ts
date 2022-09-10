@@ -1,9 +1,8 @@
-import { createWriteStream } from "fs";
 import { join, resolve } from "path";
-import { pipeline } from "stream";
-import { promisify } from "util";
+import { pipeline } from "stream/promises";
 import { homedir } from "os";
 import mkdirp from "mkdirp";
+import tar from "tar";
 
 import { DeployRequest, RepositoryService } from "./RepositoryService.js";
 
@@ -30,11 +29,15 @@ export function createDeployService(repositoryService: RepositoryService) {
 
       await mkdirp(downloadDirectoryPath);
 
-      const writable = createWriteStream(
-        join(downloadDirectoryPath, `${payload.commitId}.tar`)
+      await pipeline(
+        readable,
+        tar.extract({
+          cwd: downloadDirectoryPath,
+        })
       );
 
-      await promisify(pipeline)(readable, writable);
+      // find deploy.sh file recursively
+      // execute it relatively to the directory where it was found
     },
   };
 }
