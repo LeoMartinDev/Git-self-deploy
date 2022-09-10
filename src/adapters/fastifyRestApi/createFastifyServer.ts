@@ -1,7 +1,12 @@
 import Fastify from "fastify";
-import createLocalTunnel from "localtunnel";
 
-export async function createFastifyServer() {
+import { CreateDeployService } from "../../domain/createDeployService";
+import { RepositoryServicesStore } from "../createRepositoryServicesStore";
+
+export async function createFastifyServer(
+  repositoryServicesStore: RepositoryServicesStore,
+  createDeployService: CreateDeployService
+) {
   const fastify = Fastify({
     logger: {
       transport:
@@ -22,24 +27,14 @@ export async function createFastifyServer() {
     reply.status(409).send({ ok: false });
   });
 
-  await fastify.register(import("fastify-raw-body"), {
-    field: "rawBody",
-    global: false,
-    runFirst: true,
-    routes: ["/:provider/:projectId"],
-  });
-
   await fastify.register(import("@fastify/cors"), {
     origin: "*",
   });
 
-  const localtunnel = await createLocalTunnel({
-    port: 3000,
-    subdomain: "git-live-deploy-aaaa",
+  await fastify.register(import("./routes.js"), {
+    createDeployService,
+    repositoryServicesStore,
   });
-  fastify.log.info(`Created local tunnel available at ${localtunnel.url}`);
-
-  await fastify.register(import("./routes"));
 
   return {
     async serve() {

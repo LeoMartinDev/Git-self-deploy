@@ -1,44 +1,64 @@
 import { FastifyInstance } from "fastify";
+import { CreateDeployService } from "../../domain/createDeployService";
+import { RepositoryServicesStore } from "../createRepositoryServicesStore";
 
-export default function routes(fastify: FastifyInstance) {
+export default async function routes(
+  fastify: FastifyInstance,
+  {
+    createDeployService,
+    repositoryServicesStore,
+  }: {
+    createDeployService: CreateDeployService;
+    repositoryServicesStore: RepositoryServicesStore;
+  }
+) {
+  await fastify.register(import("fastify-raw-body"), {
+    field: "rawBody",
+    global: false,
+    runFirst: true,
+    encoding: false,
+    routes: ["/deploy/:projectId"],
+  });
+
   fastify.route<{
     Params: {
-      provider: string;
       projectId: string;
-    },
+    };
+    Headers: Record<string, string>;
   }>({
     method: "POST",
-    url: "/:provider/:projectId",
+    url: "/deploy/:projectId",
     schema: {
       params: {
         type: "object",
         properties: {
-          provider: { type: "string" },
           projectId: { type: "string" },
         },
-        required: ["provider", "projectId"],
+        required: ["projectId"],
+      },
+      headers: {
+        type: "object",
       },
     },
     handler: async (request, reply) => {
-      const { provider, projectId } = request.params;
+      const { projectId } = request.params;
 
-      if (provider === "github") {
-        const payload = await githubService.extractWebhookCallbackPayload({
-          body: request.body,
-          rawBody: request.rawBody,
-          headers: request.headers,
-        });
-  
-        // fastify.log.info("Received push event from GitHub", payload);
-  
-        // const writeStream = fs.createWriteStream(`${payload.commitId}.zip`);
-  
-        // const readStream = await githubService.downloadRepositoryArchiveAtCommit(
-        //   payload.commitId
-        // );
-  
-        // readStream.pipe(writeStream);
-      },
+      const repositoryService = await repositoryServicesStore.findById(
+        projectId
+      );
+
+      if (!repositoryService) {
+        reply.status(404).send({ error: "Project not found" });
+        return;
+      }
+
+      const deployService = await createDeployService(repositoryService);
+
+      await deployService.deploy({
+        body: request.body,
+        rawBody: request.rawBody as Buffer,
+        headers: request.headers,
+      });
     },
   });
 }

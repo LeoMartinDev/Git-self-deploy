@@ -11,7 +11,9 @@
     "fastify": "^4.5.3",
     "fastify-raw-body": "^4.0.0",
     "localtunnel": "^2.0.2",
+    "pino": "^8.5.0",
     "pino-pretty": "^9.1.0",
+    "type-fest": "^2.19.0",
     "undici": "^5.10.0"
   },
   "devDependencies": {
